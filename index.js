@@ -9,7 +9,6 @@ import { Ollama } from "ollama";
 import { v4 as uuidv4 } from "uuid"; // Para generar nombres únicos
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
-import { exec } from 'child_process';
 
 // Configuración de __dirname en ES Modules
 const __filename = fileURLToPath(import.meta.url);
@@ -21,6 +20,7 @@ const port = 5000;
 
 // Definir la ruta para almacenar currentModel.txt
 const dataDir = path.join(__dirname, 'data');
+const archivoDir = path.join(__dirname, 'uploads');
 const currentModelPath = path.join(dataDir, 'currentModel.txt');
 
 // Variable para almacenar el nombre del modelo actual
@@ -66,8 +66,6 @@ const saveCurrentModel = async (modelName) => {
   }
 };
 
-// Cargar el modelo actual al iniciar el servidor
-loadCurrentModel();
 
 // Configuración de Swagger
 const swaggerOptions = {
@@ -237,4 +235,42 @@ app.post("/prompt", async (req, res) => {
 app.listen(port, () => {
   console.log(`Servidor escuchando en http://localhost:${port}`);
   console.log(`Documentación de la API disponible en http://localhost:${port}/api-docs`);
+  initModel()
 });
+
+
+const initModel = async () => {
+  try {
+      await loadCurrentModel();
+      const filePath = './uploads/Entrenamiento del modelo.txt'
+      // Leer el contenido del archivo subido
+      const modelfileContent = await fs.readFile(filePath, 'utf8');
+  
+      // Generar un nombre único para el nuevo modelo
+      const newModelName = `model-${uuidv4()}`;
+  
+      // Si existe un modelo anterior, elimínalo
+      if (currentModelName) {
+        try {
+          await ollama.delete({ model: currentModelName });
+          console.log(`Modelo anterior "${currentModelName}" eliminado.`);
+        } catch (deleteError) {
+          console.error(`Error al eliminar el modelo anterior: ${deleteError.message}`);
+          // Opcional: Puedes decidir si continuar o no dependiendo del error
+        }
+      }
+  
+      // Crear el nuevo modelo con el contenido del archivo .txt
+      await ollama.create({ model: newModelName, modelfile: modelfileContent });
+  
+      // Actualizar el nombre del modelo actual
+      currentModelName = newModelName;
+  
+      // Guardar el nombre del modelo actual en el archivo
+      await saveCurrentModel(newModelName);
+      return
+    } catch (error) {
+      console.error(error);
+      res.status(500).send({ error: "Ocurrió un error al crear el modelo." });
+    }
+}
